@@ -1,5 +1,6 @@
 import streamlit as st
 import boto3
+import re
 from pytube import YouTube
 import requests
 import io
@@ -15,6 +16,14 @@ load_dotenv()
 
 # S3 bucket settings
 s3client = boto3.client('s3', 
+                        region_name = 'us-east-1',
+                        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY'),
+                        aws_secret_access_key = os.environ.get('AWS_SECRET_KEY')
+                        )
+
+
+# polly settings
+pollyclient = boto3.client('polly',
                         region_name = 'us-east-1',
                         aws_access_key_id = os.environ.get('AWS_ACCESS_KEY'),
                         aws_secret_access_key = os.environ.get('AWS_SECRET_KEY')
@@ -115,6 +124,44 @@ def extract_frames(video_file, frequency):
             os.remove(str(int(i/5))+'.png')
         
         os.remove(video_file)
+
+def processed_audio_from_texts():
+    # Specify the folder in the input bucket containing the text files
+    input_folder_path = 'image_input/text/'
+    # Get the list of objects (text files) in the input folder
+    objects = s3client.list_objects(Bucket=user_bucket, Prefix=input_folder_path)
+    
+    # Set the Polly voice and parameters
+    voice_id = 'Joanna'
+    output_format = 'mp3'
+    engine = 'standard'
+    # Iterate through the objects and generate audio for each text file
+    for obj in objects['Contents']:
+        # Get the text from the object (text file)
+        text = s3client.get_object(Bucket=user_bucket, Key=obj['Key'])['Body'].read().decode('utf-8')
+        #extracting the file path
+        file_path = obj['Key']
+        # Regex pattern to get the text after the last slash
+        pattern = r"/([^/]+)$"
+        # Search for the pattern in the file_path
+        match = re.search(pattern, file_path)
+        if match:
+            # Extract the text after the last slash from the match object
+            text_file_name = match.group(1)
+            # Remove ".txt" extension from file names
+            file_names_without_ext = os.path.splitext(text_file_name)[0]
+            # Set the audio file names
+            audio_file_name = 'image_input/audio/'+ file_names_without_ext + '.mp3'
+            # Generate the speech with Polly
+            response = pollyclient.synthesize_speech(
+                Text=text,
+                VoiceId=voice_id,
+                OutputFormat=output_format,
+                Engine=engine
+            )
+            # Save the audio file to S3
+            s3client.put_object(Body=response['AudioStream'].read(), Bucket=user_bucket, Key=audio_file_name)
+            s3client.delete_object(Bucket=user_bucket, Key=file_path)
 
 def get_video_youtube():
     if video_url:
@@ -233,3 +280,4 @@ if __name__=="__main__":
         else:
             # Process the YouTube video URL
             get_video_youtube()
+            processed_audio_from_texts()
