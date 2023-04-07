@@ -1,0 +1,125 @@
+import streamlit as st
+import boto3
+import requests
+import io
+import os
+from dotenv import load_dotenv
+import base64
+from moviepy.editor import *
+from PIL import Image
+
+load_dotenv()
+
+# S3 bucket settings
+s3client = boto3.client('s3', 
+                        region_name = 'us-east-1',
+                        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY'),
+                        aws_secret_access_key = os.environ.get('AWS_SECRET_KEY')
+                        )
+
+bucket_name = os.environ.get('USER_BUCKET_NAME')
+
+st.markdown(
+         f"""
+         <style>
+         .stApp {{
+             background-image: url("https://user-images.githubusercontent.com/108916132/230253159-aa1fbd18-1f2e-4071-bdd7-0c6ab9758638.png");
+             background-attachment: fixed;
+             background-size: cover
+         }}
+         </style>
+         """,
+         unsafe_allow_html=True
+     )
+
+# Title of the app
+st.title("Upload Images to S3")
+
+# Add some headers and subtitles to the app
+st.write('#### Step 1: Upload images to analyse')
+st.write('#### Step 2: Wait for Processing and Streaming')
+
+# Allow user to upload multiple images
+images = st.file_uploader("Upload your images", accept_multiple_files=True)
+
+def display_video_from_images():
+    video_stream = s3client.get_object(Bucket=bucket_name, Key='video_output/' + 'video_from_images.mp4')['Body'].read()
+
+    # Stream the video using st.video()
+    st.video(video_stream, start_time=0)
+
+    # Delete the original file
+    response_audio = s3client.list_objects_v2(Bucket=bucket_name, Prefix='image_input/audio/')
+    for obj in response_audio['Contents'][1:]:
+        s3client.delete_objects(Bucket=bucket_name, Delete={'Objects': [{'Key': obj['Key']}]})
+
+    response_image = s3client.list_objects_v2(Bucket=bucket_name, Prefix='image_input/')
+    for obj in response_image['Contents'][1:]:
+        if (('.png' or '.jpg') in obj['Key']):
+            s3client.delete_objects(Bucket=bucket_name, Delete={'Objects': [{'Key': obj['Key']}]})
+
+def processed_video_from_images():
+    with st.spinner('Processing the images...'):
+        image_files=[]
+        audio_files=[]
+        final_clip = None
+
+        # List of image and audio files
+        response_audio = s3client.list_objects_v2(Bucket=bucket_name, Prefix='image_input/audio/')
+
+        for obj in response_audio['Contents'][1:]:
+            filename_audio=obj['Key'].replace('image_input/audio/', '')
+            s3client.download_file(bucket_name, 'image_input/audio/'+f'{filename_audio}', f'{filename_audio}')
+            audio_files.append(filename_audio)
+
+        response_image = s3client.list_objects_v2(Bucket=bucket_name, Prefix='image_input/')
+
+        for obj in response_image['Contents'][1:]:
+            filename_image=obj['Key'].replace('image_input/', '')
+            if (('.png' or '.jpg') in filename_image):
+                s3client.download_file(bucket_name, 'image_input/'+f'{filename_image}', f'{filename_image}')
+                # Open an image
+                image = Image.open(filename_image)
+                # Resize the image
+                resized_image = image.resize((640, 360))
+                # Save the resized image
+                resized_image.save(filename_image)
+                image_files.append(filename_image)
+
+        for i in range(len(image_files)):
+            if final_clip is None:
+                final_clip = ImageClip(image_files[i], duration=5).set_audio(AudioFileClip(audio_files[i]))
+            else:
+                # Add the audio to the portion of the video after the insertion point
+                final_clip = concatenate_videoclips([final_clip, ImageClip(image_files[i], duration=5).set_audio(AudioFileClip(audio_files[i]))])
+        
+        if (final_clip!=None):
+            final_clip.write_videofile('video_from_images.mp4', fps=24)
+
+            # Upload the final video to S3
+            s3client.upload_file('video_from_images.mp4', bucket_name, 'video_output/'+'video_from_images.mp4')
+
+            # Delete local files
+            os.remove('video_from_images.mp4')
+            for j in range(len(image_files)):
+                os.remove(image_files[j])
+                os.remove(audio_files[j])
+        
+            display_video_from_images()
+
+def get_images():
+    count=0
+
+    # Loop through all uploaded images
+    for image in images:
+        count+=1
+        with st.spinner('Uploading images to S3 bucket...'):
+            # Upload image to S3
+            s3client.upload_fileobj(image, bucket_name, 'image_input/'+image.name)
+        
+    if (count==len(images) and count!=0):
+        st.success("Images uploaded successfully!")
+        processed_video_from_images()
+
+if __name__=="__main__":
+    get_images()
