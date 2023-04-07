@@ -29,29 +29,6 @@ pollyclient = boto3.client('polly',
 
 bucket_name = os.environ.get('USER_BUCKET_NAME')
 
-st.markdown(
-         f"""
-         <style>
-         .stApp {{
-             background-image: url("https://user-images.githubusercontent.com/108916132/230649126-a68a45d3-c1b2-4868-822b-435e0ccbf396.jpg");
-             background-attachment: fixed;
-             background-size: cover
-         }}
-         </style>
-         """,
-         unsafe_allow_html=True
-     )
-
-# Title of the app
-st.title("Upload Images to S3")
-
-# Add some headers and subtitles to the app
-st.write('#### Step 1: Upload images to analyse')
-st.write('#### Step 2: Wait for Processing and Streaming')
-
-# Allow user to upload multiple images
-images = st.file_uploader("Upload your images", accept_multiple_files=True)
-
 def display_video_from_images():
     video_stream = s3client.get_object(Bucket=bucket_name, Key='video_output/' + 'video_from_images.mp4')['Body'].read()
 
@@ -167,9 +144,56 @@ def get_images():
         
     if (count==len(images) and count!=0):
         st.success("Images uploaded successfully!")
-        processed_video_from_images()
+        # processed_video_from_images()
+
+        #Trigger DAG with file and language as parameters
+        airflow_url = os.environ.get('AIRFLOW_URL_IMAGE')
+        headers = {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "Authorization": os.environ.get('AIRFLOW_AUTH'),
+        }
+        json_data = {"conf" : {"test": 'test'}}
+        response = requests.post(airflow_url, headers=headers, json=json_data)
+        if response.status_code == 200:
+            response_json = response.json()
+            st.write(
+                "DAG triggered successfully",
+                response_json["execution_date"],
+                response_json["dag_run_id"],
+            )
+
+            response_my_video = s3client.list_objects(Bucket=bucket_name, Prefix='video_output/')
+
+            for obj in response_my_video['Contents'][1:]:
+                if ('video_from_images.mp4' in obj['Key']):
+                    display_video_from_images()
+
+        else:
+            st.write(f"Error triggering DAG: {response.text}", None, None)
 
 if __name__=="__main__":
-    processed_audio_from_texts()
+    st.markdown(
+         f"""
+         <style>
+         .stApp {{
+             background-image: url("https://user-images.githubusercontent.com/108916132/230649126-a68a45d3-c1b2-4868-822b-435e0ccbf396.jpg");
+             background-attachment: fixed;
+             background-size: cover
+         }}
+         </style>
+         """,
+         unsafe_allow_html=True
+     )
+
+    # Title of the app
+    st.title("Upload Images to S3")
+
+    # Add some headers and subtitles to the app
+    st.write('#### Step 1: Upload images to analyse')
+    st.write('#### Step 2: Wait for Processing and Streaming')
+
+    # Allow user to upload multiple images
+    images = st.file_uploader("Upload your images", accept_multiple_files=True)
+
     get_images()
-    
