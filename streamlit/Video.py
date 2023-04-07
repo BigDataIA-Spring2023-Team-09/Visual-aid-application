@@ -113,16 +113,20 @@ def processed_video(videofile, frequency):
     display_video(videofile)
 
 def extract_frames(video_file, frequency):
+    if frequency=='5sec':
+        f=5
+    else:
+        f=10
     with st.spinner('Extracting frames from video...'):
         video_file=video_file.replace('.mp4', '')
         s3client.download_file(user_bucket, 'video_input/'+video_file + '.mp4', video_file)
         clip = VideoFileClip(video_file)
 
         video_duration = clip.duration
-        for i in range (0, int(video_duration), 5):
-            clip.save_frame(str(int(i/5))+'.png', i)
-            s3client.upload_file(str(int(i/5))+'.png', user_bucket, 'video_input/frames/' + str(int(i/5)) + '.png')
-            os.remove(str(int(i/5))+'.png')
+        for i in range (0, int(video_duration), f):
+            clip.save_frame(str(int(i/f))+'.png', i)
+            s3client.upload_file(str(int(i/f))+'.png', user_bucket, 'video_input/frames/' + str(int(i/f)) + '.png')
+            os.remove(str(int(i/f))+'.png')
         
         os.remove(video_file)
 
