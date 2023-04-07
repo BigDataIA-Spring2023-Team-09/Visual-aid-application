@@ -3,6 +3,7 @@ import boto3
 import requests
 import io
 import os
+import re
 from dotenv import load_dotenv
 import base64
 from moviepy.editor import *
@@ -15,6 +16,13 @@ s3client = boto3.client('s3',
                         region_name = 'us-east-1',
                         aws_access_key_id = os.environ.get('AWS_ACCESS_KEY'),
                         aws_secret_access_key = os.environ.get('AWS_SECRET_KEY')
+                        )
+
+
+session = boto3.Session(
+                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
+                        aws_secret_access_key=os.environ.get('AWS_SECRET_KEY'),
+                        region_name='us-east-1'
                         )
 
 bucket_name = os.environ.get('USER_BUCKET_NAME')
@@ -57,6 +65,53 @@ def display_video_from_images():
     for obj in response_image['Contents'][1:]:
         if (('.png' or '.jpg') in obj['Key']):
             s3client.delete_objects(Bucket=bucket_name, Delete={'Objects': [{'Key': obj['Key']}]})
+
+def processed_audio_from_texts():
+
+    # Set up the S3 client
+    s3 = session.client('s3')
+
+
+    # Specify the folder in the input bucket containing the text files
+    input_folder_path = 'image_input/text/'
+    # Get the list of objects (text files) in the input folder
+    objects = s3.list_objects(Bucket=bucket_name, Prefix=input_folder_path)
+    # Set up the Polly client
+    polly = session.client('polly')
+
+    # Set the Polly voice and parameters
+    voice_id = 'Joanna'
+    output_format = 'mp3'
+    engine = 'standard'
+
+    # Iterate through the objects and generate audio for each text file
+    for obj in objects['Contents']:
+        # Get the text from the object (text file)
+        text = s3.get_object(Bucket=bucket_name, Key=obj['Key'])['Body'].read().decode('utf-8')
+        #extracting the file path
+        file_path = obj['Key']
+        # Regex pattern to get the text after the last slash
+        pattern = r"/([^/]+)$"
+        # Search for the pattern in the file_path
+        match = re.search(pattern, file_path)
+        if match:
+            # Extract the text after the last slash from the match object
+            text_file_name = match.group(1)
+            # Remove ".txt" extension from file names
+            file_names_without_ext = os.path.splitext(text_file_name)[0]
+            # Set the audio file names
+            audio_file_name = 'image_input/audio/'+ file_names_without_ext + '.mp3'
+
+            # Generate the speech with Polly
+            response = polly.synthesize_speech(
+                Text=text,
+                VoiceId=voice_id,
+                OutputFormat=output_format,
+                Engine=engine
+            )
+            # Save the audio file to S3
+            s3.put_object(Body=response['AudioStream'].read(), Bucket=bucket_name, Key=audio_file_name)
+            s3.delete_object(Bucket=bucket_name, Key=file_path)
 
 def processed_video_from_images():
     with st.spinner('Processing the images...'):
@@ -122,4 +177,6 @@ def get_images():
         processed_video_from_images()
 
 if __name__=="__main__":
+    processed_audio_from_texts()
     get_images()
+    
