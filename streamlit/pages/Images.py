@@ -19,10 +19,11 @@ s3client = boto3.client('s3',
                         )
 
 
-session = boto3.Session(
-                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
-                        aws_secret_access_key=os.environ.get('AWS_SECRET_KEY'),
-                        region_name='us-east-1'
+# polly settings
+pollyclient = boto3.client('polly', 
+                        region_name = 'us-east-1',
+                        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY'),
+                        aws_secret_access_key = os.environ.get('AWS_SECRET_KEY')
                         )
 
 bucket_name = os.environ.get('USER_BUCKET_NAME')
@@ -68,16 +69,11 @@ def display_video_from_images():
 
 def processed_audio_from_texts():
 
-    # Set up the S3 client
-    s3 = session.client('s3')
-
-
     # Specify the folder in the input bucket containing the text files
     input_folder_path = 'image_input/text/'
     # Get the list of objects (text files) in the input folder
-    objects = s3.list_objects(Bucket=bucket_name, Prefix=input_folder_path)
-    # Set up the Polly client
-    polly = session.client('polly')
+    objects = s3client.list_objects(Bucket=bucket_name, Prefix=input_folder_path)
+    
 
     # Set the Polly voice and parameters
     voice_id = 'Joanna'
@@ -87,7 +83,7 @@ def processed_audio_from_texts():
     # Iterate through the objects and generate audio for each text file
     for obj in objects['Contents']:
         # Get the text from the object (text file)
-        text = s3.get_object(Bucket=bucket_name, Key=obj['Key'])['Body'].read().decode('utf-8')
+        text = s3client.get_object(Bucket=bucket_name, Key=obj['Key'])['Body'].read().decode('utf-8')
         #extracting the file path
         file_path = obj['Key']
         # Regex pattern to get the text after the last slash
@@ -103,15 +99,15 @@ def processed_audio_from_texts():
             audio_file_name = 'image_input/audio/'+ file_names_without_ext + '.mp3'
 
             # Generate the speech with Polly
-            response = polly.synthesize_speech(
+            response = pollyclient.synthesize_speech(
                 Text=text,
                 VoiceId=voice_id,
                 OutputFormat=output_format,
                 Engine=engine
             )
             # Save the audio file to S3
-            s3.put_object(Body=response['AudioStream'].read(), Bucket=bucket_name, Key=audio_file_name)
-            s3.delete_object(Bucket=bucket_name, Key=file_path)
+            s3client.put_object(Body=response['AudioStream'].read(), Bucket=bucket_name, Key=audio_file_name)
+            s3client.delete_object(Bucket=bucket_name, Key=file_path)
 
 def processed_video_from_images():
     with st.spinner('Processing the images...'):
