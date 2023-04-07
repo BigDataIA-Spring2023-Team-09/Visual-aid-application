@@ -23,7 +23,7 @@ st.markdown(
          f"""
          <style>
          .stApp {{
-             background-image: url("https://user-images.githubusercontent.com/108916132/230253159-aa1fbd18-1f2e-4071-bdd7-0c6ab9758638.png");
+             background-image: url("https://user-images.githubusercontent.com/108916132/230649126-a68a45d3-c1b2-4868-822b-435e0ccbf396.jpg");
              background-attachment: fixed;
              background-size: cover
          }}
