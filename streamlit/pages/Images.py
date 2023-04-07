@@ -4,6 +4,7 @@ import requests
 import io
 import os
 import re
+import re
 from dotenv import load_dotenv
 import base64
 from moviepy.editor import *
@@ -171,3 +172,4 @@ def get_images():
 if __name__=="__main__":
     processed_audio_from_texts()
     get_images()
+    
