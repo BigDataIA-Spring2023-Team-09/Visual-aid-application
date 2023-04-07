@@ -4,6 +4,7 @@ import requests
 import io
 import os
 import re
+import re
 from dotenv import load_dotenv
 import base64
 from moviepy.editor import *
@@ -20,7 +21,7 @@ s3client = boto3.client('s3',
 
 
 # polly settings
-pollyclient = boto3.client('polly', 
+pollyclient = boto3.client('polly',
                         region_name = 'us-east-1',
                         aws_access_key_id = os.environ.get('AWS_ACCESS_KEY'),
                         aws_secret_access_key = os.environ.get('AWS_SECRET_KEY')
@@ -32,7 +33,7 @@ st.markdown(
          f"""
          <style>
          .stApp {{
-             background-image: url("https://user-images.githubusercontent.com/108916132/230253159-aa1fbd18-1f2e-4071-bdd7-0c6ab9758638.png");
+             background-image: url("https://user-images.githubusercontent.com/108916132/230649126-a68a45d3-c1b2-4868-822b-435e0ccbf396.jpg");
              background-attachment: fixed;
              background-size: cover
          }}
@@ -68,18 +69,15 @@ def display_video_from_images():
             s3client.delete_objects(Bucket=bucket_name, Delete={'Objects': [{'Key': obj['Key']}]})
 
 def processed_audio_from_texts():
-
     # Specify the folder in the input bucket containing the text files
     input_folder_path = 'image_input/text/'
     # Get the list of objects (text files) in the input folder
     objects = s3client.list_objects(Bucket=bucket_name, Prefix=input_folder_path)
     
-
     # Set the Polly voice and parameters
     voice_id = 'Joanna'
     output_format = 'mp3'
     engine = 'standard'
-
     # Iterate through the objects and generate audio for each text file
     for obj in objects['Contents']:
         # Get the text from the object (text file)
@@ -97,7 +95,6 @@ def processed_audio_from_texts():
             file_names_without_ext = os.path.splitext(text_file_name)[0]
             # Set the audio file names
             audio_file_name = 'image_input/audio/'+ file_names_without_ext + '.mp3'
-
             # Generate the speech with Polly
             response = pollyclient.synthesize_speech(
                 Text=text,
