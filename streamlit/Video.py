@@ -12,6 +12,8 @@ from moviepy.editor import *
 import math
 from PIL import Image
 from datetime import timedelta
+from airflow.models import DagRun
+from airflow.api.client.local_client import Client
 
 load_dotenv()
 
@@ -37,16 +39,6 @@ def display_video(video_title):
 
     # Stream the video using st.video()
     st.video(video_stream, start_time=0)
-
-    # Delete the original file
-    response_audio = s3client.list_objects_v2(Bucket=user_bucket, Prefix='video_input/audio/')
-    for obj in response_audio['Contents'][1:]:
-        s3client.delete_objects(Bucket=user_bucket, Delete={'Objects': [{'Key': obj['Key']}]})
-
-    response_image = s3client.list_objects_v2(Bucket=user_bucket, Prefix='video_input/frames/')
-    for obj in response_image['Contents'][1:]:
-        if (('.png' or '.jpg') in obj['Key']):
-            s3client.delete_objects(Bucket=user_bucket, Delete={'Objects': [{'Key': obj['Key']}]})
 
 def processed_video(videofile, frequency):
     if frequency=='5sec':
@@ -199,7 +191,7 @@ def get_video_youtube():
         # extract_frames(video_title, frequency)
 
         #Trigger DAG with file and language as parameters
-        airflow_url = os.environ.get('AIRFLOW_URL')
+        airflow_url = os.environ.get('AIRFLOW_URL_VIDEO')
         headers = {
             "Content-Type": "application/json",
             "Cache-Control": "no-cache",
@@ -214,8 +206,17 @@ def get_video_youtube():
                 response_json["execution_date"],
                 response_json["dag_run_id"],
             )
+
+            response_my_video = s3client.list_objects(Bucket=user_bucket, Prefix='video_output/')
+
+            for obj in response_my_video['Contents'][1:]:
+                if (video_title in obj['Key']):
+                    display_video(video_title)
+
         else:
             st.write(f"Error triggering DAG: {response.text}", None, None)
+    else:
+        st.write("Video not selected!")
 
         # processed_video(video_title)
 
@@ -265,7 +266,7 @@ if __name__=="__main__":
                 st.write(f"File uploaded to S3 bucket: <bucket_name>/<object_name>")
                 # extract_frames(video_file.name, frequency)
                 #Trigger DAG with file and language as parameters
-                airflow_url = os.environ.get('AIRFLOW_URL')
+                airflow_url = os.environ.get('AIRFLOW_URL_VIDEO')
                 headers = {
                     "Content-Type": "application/json",
                     "Cache-Control": "no-cache",
@@ -280,9 +281,20 @@ if __name__=="__main__":
                         response_json["execution_date"],
                         response_json["dag_run_id"],
                     )
+
+                    response_my_video = s3client.list_objects(Bucket=user_bucket, Prefix='video_output/')
+
+                    for obj in response_my_video['Contents'][1:]:
+                        if (video_file.name in obj['Key']):
+                            display_video(video_file.name)
+
                 else:
                     st.write(f"Error triggering DAG: {response.text}", None, None)
+            else:
+                st.write("Video not selected!")
         else:
             # Process the YouTube video URL
             get_video_youtube()
-            processed_audio_from_texts()
+            # processed_audio_from_texts()
+
+    
