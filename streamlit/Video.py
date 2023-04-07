@@ -12,8 +12,6 @@ from moviepy.editor import *
 import math
 from PIL import Image
 from datetime import timedelta
-from airflow.models import DagRun
-from airflow.api.client.local_client import Client
 
 load_dotenv()
 
